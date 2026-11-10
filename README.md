@@ -2,9 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/pi-anthropic-oauth?style=flat-square&logo=npm&logoColor=white&label=npm&color=7c3aed)](https://www.npmjs.com/package/pi-anthropic-oauth)
 
-**Use your Claude Pro/Max subscription in Pi, no API key or Claude Code installation required.**
+**Use Claude Pro/Max OAuth in Pi, no API key or Claude Code installation required.**
 
-Keeps Pi's built-in models and tools.
+Keeps Pi's built-in models, tools, and Anthropic request handling.
 
 > [!IMPORTANT]
 > Requires Pi 0.86.0+
@@ -13,10 +13,11 @@ Keeps Pi's built-in models and tools.
 
 - Claude Pro/Max login from `/login`
 - Automatic token refresh
-- Uses your plan's included usage
 - No Anthropic API key needed
 - No Claude Code installation required
 - Uses the Anthropic models available in Pi's built-in model registry
+- Uses Pi's built-in Messages API streaming, tool conversion, system prompts, thinking, and prompt caching
+- `/usage` for plan usage and limits
 
 ## Quick start
 
@@ -55,57 +56,21 @@ pi update npm:pi-anthropic-oauth
 ## How it works
 
 - **Login:** `/login` → `Claude Pro/Max`; tokens refresh automatically.
-- **Requests:** Direct to Anthropic—no proxy or API key.
-- **Compatibility:** Adapts headers, system prompts, and tool names for Claude Code.
-- **Integration:** Streams native Pi events; tools run in Pi.
+- **Requests:** Pi's built-in Anthropic provider sends requests directly to Anthropic—no proxy or API key.
+- **Integration:** Pi owns streaming, message and tool conversion, system prompts, thinking, caching, cancellation, and usage accounting.
+- **Extension scope:** This package customizes OAuth login/refresh and adds `/usage`; it does not replace Pi's request path.
 
-Creates `~/.Claude Code` → `~/.pi` if missing.
+The extension does not create a `~/.Claude Code` symlink, rewrite Pi's system prompt, add its own billing system block, or rename custom tools to MCP-style names.
 
-## Claude Code version override
-
-Anthropic gates new models on the Claude Code client version (error `claude_code_version_too_old`). The version is sent in both the OAuth user agent and the billing header of the system prompt. Override it without reinstalling:
-
-```bash
-PI_ANTHROPIC_OAUTH_CLAUDE_CODE_VERSION=2.1.280
-```
+Whether a request uses plan limits or Extra usage is determined by Anthropic and Pi's current provider behavior; this extension does not override that decision.
 
 ## Prompt cache retention
 
-Cache breakpoints follow pi's `cacheRetention` setting: `short` (default) uses the 5-minute cache, `long` uses the 1-hour cache, and `none` disables caching. Without an explicit setting, `PI_CACHE_RETENTION` is honored, same as pi's built-in Anthropic provider:
+Prompt caching is handled by Pi's built-in Anthropic provider. Pi's `cacheRetention` setting and `PI_CACHE_RETENTION` environment variable apply as they do without this extension:
 
 ```bash
 PI_CACHE_RETENTION=long
 ```
-
-## System prompt rewriting
-
-When using Claude Pro/Max OAuth, the extension prepends the Claude Code billing-header and identity system blocks and rewrites standalone `Pi` / `pi` references in Pi's system prompt to `Claude Code`. The rewrite mode defaults to `aggressive`:
-
-```bash
-PI_ANTHROPIC_OAUTH_REWRITE_MODE=aggressive
-```
-
-Other modes are opt-in and avoid rewriting some technical strings such as paths, package names, or repository names. If OAuth starts failing, switch back to `aggressive`.
-
-Available modes:
-
-| Mode             | Behavior                                                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------------------------------- |
-| `aggressive`     | Default. Replaces standalone `Pi` / `pi` wherever the word-boundary pattern matches.                        |
-| `path-safe`      | Avoids replacing `Pi` / `pi` immediately after `/` or `\`, preserving path segments like `/srv/dev/pi-foo`. |
-| `technical-safe` | Avoids replacing `Pi` / `pi` next to common technical-token separators: `/`, `\`, `.`, `@`, `:`, `_`, `-`.  |
-| `custom`         | Uses `PI_ANTHROPIC_OAUTH_REWRITE_PATTERN` as the replacement regex.                                         |
-
-Custom patterns can be a regex source or a JavaScript-style regex literal. The `g` flag is added automatically when omitted:
-
-```bash
-PI_ANTHROPIC_OAUTH_REWRITE_MODE=custom
-PI_ANTHROPIC_OAUTH_REWRITE_PATTERN='(?<![/\\])\b[Pp]i\b'
-# or
-PI_ANTHROPIC_OAUTH_REWRITE_PATTERN='/\bpi\b/gi'
-```
-
-There is no separate off mode. If you need to disable rewriting entirely, use a custom pattern that never matches, such as `(?!)`. Disabling or weakening the rewrite may affect OAuth compatibility.
 
 ## Extra models
 
@@ -138,11 +103,12 @@ To add another Anthropic model, create `~/.pi/agent/models.json`:
 
 ## Troubleshooting
 
-- If you see `400 invalid_request_error` with "Third-party apps now draw from your extra usage, not your plan limits.", update this extension (`pi update npm:pi-anthropic-oauth`), then run `/login` with no arguments and choose `Claude Pro/Max`.
-- Pi's built-in extra-usage warning may still appear. Check `/usage` to confirm billing; disable the warning in `/settings` if desired.
-- If local callback login does not complete, paste the final callback URL or `code#state` when prompted
-- If you see `401 Invalid bearer token`, remove any fake `sk-ant-oat...` placeholder from `~/.pi/agent/models.json` and log in again
-- If something breaks, please open an issue with your Pi version, extension version, and error output
+- If local callback login does not complete, paste the final callback URL or `code#state` when prompted.
+- If you see `401 Invalid bearer token`, remove any fake `sk-ant-oat...` placeholder from `~/.pi/agent/models.json` and log in again.
+- If Anthropic reports that third-party apps draw from Extra usage rather than plan limits, check `/usage` for your plan limits and Extra usage status. The extension does not change Anthropic's server-side policy.
+- Pi's built-in Extra usage warning may still appear. It can be hidden in `/settings`, but hiding the warning does not change billing.
+- If you see `claude_code_version_too_old` or another provider-compatibility error, update Pi. Client headers and provider compatibility are managed by Pi rather than an extension-specific version override.
+- If something breaks, please open an issue with your Pi version, extension version, and error output.
 
 ## License
 
